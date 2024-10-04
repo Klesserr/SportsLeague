@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json;
 
 namespace SportsLeague // Note: actual namespace depends on the project name.
 {
@@ -19,22 +20,20 @@ namespace SportsLeague // Note: actual namespace depends on the project name.
 				new int[]{3,1,1,1},
 				new int[]{4,0,2,0},
 			};
-			int[] rank = ComputeRanks(number, games);
-			foreach (var r in rank)
-			{
-				Console.Write(r);
-				Console.WriteLine();
-			}
+
+			int numbers2 = 8;
+			int[][] games2 = new int[][] { new int[] { 0, 7, 2, 1 } };
+			var rank = ComputeRanks(numbers2, games2);
+			var json = JsonSerializer.Serialize(rank);
+			Console.WriteLine(json);
+
 		}
 		public static int[] ComputeRanks(int number, int[][] games)
 		{
+			List<Teams> detailedTeams = new List<Teams>();
 			List<int> teams = new List<int>();
-			int[] ranking = new int[number];
-			int[] points = new int[number];
-			int[] goalsFavor = new int[number];
-			int[] goalsAgainst = new int[number];
-			int[] differenceGoals = new int[number];
-			int[] position = new int[number];
+			List<int> emptyValues = new List<int>();
+			int[] selectRanking = new int[number];
 
 			for (int i = 0; i < games.GetLength(0); i++)
 			{
@@ -57,55 +56,114 @@ namespace SportsLeague // Note: actual namespace depends on the project name.
 				}
 			}
 
-			teams.Sort();
-			for (int i = 0; i < games.GetLength(0); i++)
+			if (teams.Count == 0)
 			{
-				int teamA = games[i][0];
-				int teamB = games[i][1];
-
-				int scoreTeamA = games[i][2];
-				int scoreTeamB = games[i][3];
-
-				goalsFavor[teamA] += scoreTeamA;
-				goalsAgainst[teamA] += scoreTeamB;
-				goalsFavor[teamB] += scoreTeamB;
-				goalsAgainst[teamB] += scoreTeamA;
-
-				if (scoreTeamA > scoreTeamB)
+				for (int i = 0; i < number; i++)
 				{
-					points[teamA] += 2;
+					emptyValues.Add(1);
 				}
-				else if (scoreTeamB > scoreTeamA)
+				return emptyValues.ToArray();
+			}
+
+			foreach (var team in teams)
+			{
+				detailedTeams.Add(
+					new Teams()
+					{
+						Name = team
+					}
+				);
+			}
+			while (number > 0)
+			{
+				for (int i = 0; i < games.GetLength(0); i++)
 				{
-					points[teamB] += 2;
+					Teams teamA = detailedTeams.FirstOrDefault(t => t.Name == games[i][0]);
+					Teams teamB = detailedTeams.FirstOrDefault(t => t.Name == games[i][1]);
+
+					var goalsScoredByA = games[i][2];
+					var goalsScoredByB = games[i][3];
+
+					teamA.GoalsFavor += goalsScoredByA;
+					teamB.GoalsAgainst += goalsScoredByA;
+
+					teamB.GoalsFavor += goalsScoredByB;
+					teamA.GoalsAgainst += goalsScoredByB;
+
+
+					if (goalsScoredByA > goalsScoredByB)
+					{
+						teamA.Points += 2;
+					}
+					else if (goalsScoredByA < goalsScoredByB)
+					{
+						teamB.Points += 2; ;
+					}
+					else
+					{
+						teamA.Points += 1;
+						teamB.Points += 1;
+					}
 				}
-				else
+
+				foreach (var team in detailedTeams)
 				{
-					points[teamA] += 1;
-					points[teamB] += 1;
+					team.DifferenceGoals = team.GoalsFavor - team.GoalsAgainst;
 				}
+
+				var teamsOrderByPoints = detailedTeams.OrderByDescending(t => t.Points).ToList();
+
+				var ranking = 1;
+				foreach (var team in teamsOrderByPoints)
+				{
+					team.Ranking = ranking;
+					ranking++;
+				}
+
+				for (int i = 0; i < teamsOrderByPoints.Count - 1; i++)
+				{
+					if (teamsOrderByPoints[i].Points == teamsOrderByPoints[i + 1].Points)
+					{
+						if (teamsOrderByPoints[i].DifferenceGoals == teamsOrderByPoints[i + 1].DifferenceGoals)
+						{
+							if (teamsOrderByPoints[i].GoalsFavor == teamsOrderByPoints[i + 1].GoalsFavor)
+							{
+								teamsOrderByPoints[i + 1].Ranking = teamsOrderByPoints[i].Ranking;
+							}
+							else if (teamsOrderByPoints[i].GoalsFavor < teamsOrderByPoints[i + 1].GoalsFavor)
+							{
+								var actualPosition = teamsOrderByPoints[i].Ranking;
+								teamsOrderByPoints[i].Ranking = teamsOrderByPoints[i + 1].Ranking;
+								teamsOrderByPoints[i + 1].Ranking = actualPosition;
+							}
+						}
+						else if (teamsOrderByPoints[i].DifferenceGoals < teamsOrderByPoints[i + 1].DifferenceGoals)
+						{
+							var actualPosition = teamsOrderByPoints[i].Ranking;
+							teamsOrderByPoints[i].Ranking = teamsOrderByPoints[i + 1].Ranking;
+							teamsOrderByPoints[i + 1].Ranking = actualPosition;
+						}
+					}
+				}
+
+				var teamsOrderByName = teamsOrderByPoints.OrderBy(t => t.Name).ToList();
+
+				selectRanking = teamsOrderByName.Select(t => t.Ranking).ToArray();
+
+				number--;
 			}
 
-			for (int i = 0; i < teams.Count; i++)
-			{
-				differenceGoals[i] = goalsFavor[i] - goalsAgainst[i];
-			}
-
-			for (int i = 0; i < teams.Count; i++)
-			{
-				
-			}
-			for (int i = 0; i < teams.Count; i++)
-			{
-
-				Console.Write($"Position: {position[i]} |");
-				Console.Write($"Team : {teams[i]} | ");
-				Console.Write($"GF:GC {goalsFavor[i]} : {goalsAgainst[i]} | ");
-				Console.Write($"Difference Goals: {differenceGoals[i]} |");
-				Console.Write($"Points: {points[i]} ");
-				Console.WriteLine();
-			}
-			return ranking;
+			return selectRanking;
 		}
+		public class Teams
+		{
+			public int Name { get; set; }
+			public int GoalsFavor { get; set; }
+			public int GoalsAgainst { get; set; }
+			public int DifferenceGoals { get; set; }
+			public int Points { get; set; }
+			public int Ranking { get; set; }
+		}
+
 	}
 }
